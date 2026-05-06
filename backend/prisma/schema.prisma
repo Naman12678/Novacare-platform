@@ -1,0 +1,245 @@
+// ============================================================
+// NovaCare v2.0 — Prisma Schema
+// PostgreSQL database for FHIR resources, hospitals, patients, and analytics
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---- Core Patient Registry ----
+model Patient {
+  id              String   @id @default(uuid())
+  abhaId          String   @unique @map("abha_id")
+  nameEncrypted   String   @map("name_encrypted")
+  dateOfBirth     DateTime @map("date_of_birth")
+  gender          String
+  pincode         String
+  languagePref    String   @default("hi") @map("language_pref")
+  contactPhone    String   @map("contact_phone")
+  hospitalId      String   @map("hospital_id")
+  ruralFlag       Boolean  @default(false) @map("rural_flag")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  hospital        Hospital    @relation(fields: [hospitalId], references: [id])
+  caregivers      Caregiver[]
+  episodes        Episode[]
+  escalations     Escalation[]
+  fhirResources   FhirResource[]
+  dailyReports    DailyReport[]
+
+  @@map("patients")
+}
+
+// ---- Hospital Registry ----
+model Hospital {
+  id              String   @id @default(uuid())
+  name            String
+  hipId           String   @unique @map("hip_id")
+  abdmRegistered  Boolean  @default(false) @map("abdm_registered")
+  stateCode       String   @map("state_code")
+  district        String
+  tier            Int      @default(2) // 1=Tertiary, 2=District, 3=PHC
+  active          Boolean  @default(true)
+  contactEmail    String?  @map("contact_email")
+  contactPhone    String?  @map("contact_phone")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  patients        Patient[]
+  episodes        Episode[]
+  users           User[]
+  analytics       HospitalAnalytics[]
+
+  @@map("hospitals")
+}
+
+// ---- Care Episode (30-day cycle) ----
+model Episode {
+  id              String   @id @default(uuid())
+  patientAbhaId   String   @map("patient_abha_id")
+  hospitalId      String   @map("hospital_id")
+  dischargeDate   DateTime @map("discharge_date")
+  carePlanId      String?  @map("care_plan_id")
+  diagnosisCodes  String[] @map("diagnosis_codes")
+  status          EpisodeStatus @default(ACTIVE)
+  currentDay      Int      @default(0) @map("current_day")
+  riskScore       Float    @default(0.0) @map("risk_score")
+  riskTier        String   @default("GREEN") @map("risk_tier")
+  adherenceRate   Float?   @map("adherence_rate")
+  readmitted      Boolean? @map("readmitted")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  patient         Patient    @relation(fields: [patientAbhaId], references: [abhaId])
+  hospital        Hospital   @relation(fields: [hospitalId], references: [id])
+  escalations     Escalation[]
+
+  @@map("episodes")
+}
+
+enum EpisodeStatus {
+  ACTIVE
+  COMPLETED
+  READMITTED
+  ARCHIVED
+}
+
+// ---- Daily Symptom Report (stored from WhatsApp check-ins) ----
+model DailyReport {
+  id              String   @id @default(uuid())
+  patientAbhaId   String   @map("patient_abha_id")
+  episodeId       String   @map("episode_id")
+  dayNumber       Int      @map("day_number")
+  feelingScore    Int      @map("feeling_score") // 1=better, 3=same, 5=worse
+  symptoms        String[] @default([])
+  symptomDetail   String?  @map("symptom_detail")
+  medTaken        Boolean  @default(true) @map("med_taken")
+  vitals          Json?    // {bp: "130/85", sugar: "140 mg/dL"}
+  riskScore       Float?   @map("risk_score")
+  riskTier        String?  @map("risk_tier")
+  source          String   @default("whatsapp") // whatsapp, ivr, manual
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  patient         Patient  @relation(fields: [patientAbhaId], references: [abhaId])
+
+  @@index([patientAbhaId, dayNumber])
+  @@map("daily_reports")
+}
+
+// ---- Caregiver Registry ----
+model Caregiver {
+  id              String   @id @default(uuid())
+  patientAbhaId   String   @map("patient_abha_id")
+  name            String
+  phoneEncrypted  String   @map("phone_encrypted")
+  relationship    String   // spouse, child, sibling, other
+  whatsappOptIn   Boolean  @default(false) @map("whatsapp_opt_in")
+  languagePref    String   @default("hi") @map("language_pref")
+  lastActiveAt    DateTime? @map("last_active_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  patient         Patient  @relation(fields: [patientAbhaId], references: [abhaId])
+
+  @@map("caregivers")
+}
+
+// ---- FHIR Resource Store ----
+model FhirResource {
+  id              String   @id @default(uuid())
+  resourceType    String   @map("resource_type") // CarePlan, Observation, MedicationRequest, etc.
+  patientAbhaId   String   @map("patient_abha_id")
+  version         Int      @default(1)
+  fhirJson        Json     @map("fhir_json")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  patient         Patient  @relation(fields: [patientAbhaId], references: [abhaId])
+
+  @@index([patientAbhaId, resourceType])
+  @@map("fhir_resources")
+}
+
+// ---- Escalation Audit Trail ----
+model Escalation {
+  id              String   @id @default(uuid())
+  patientAbhaId   String   @map("patient_abha_id")
+  episodeId       String   @map("episode_id")
+  tier            String   // GREEN, ORANGE, RED
+  triggerReason   String   @map("trigger_reason")
+  shapExplanation String?  @map("shap_explanation")
+  recommendedAction String? @map("recommended_action")
+  status          String   @default("PENDING") // PENDING, CONFIRMED, RESOLVED, EXPIRED
+  resolvedAt      DateTime? @map("resolved_at")
+  outcome         String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  patient         Patient  @relation(fields: [patientAbhaId], references: [abhaId])
+  episode         Episode  @relation(fields: [episodeId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("escalations")
+}
+
+// ---- Medication Master ----
+model Medication {
+  id                  String  @id @default(uuid())
+  rxnormCode          String  @unique @map("rxnorm_code")
+  genericName         String  @map("generic_name")
+  brandName           String? @map("brand_name")
+  janAushadhiAvailable Boolean @default(false) @map("jan_aushadhi_available")
+  janAushadhiPrice    Float?  @map("jan_aushadhi_price")
+  brandPrice          Float?  @map("brand_price")
+  dosageForm          String? @map("dosage_form")
+
+  @@map("medications")
+}
+
+// ---- ML Model Registry ----
+model ModelVersion {
+  id              String   @id @default(uuid())
+  version         String
+  trainingDate    DateTime @map("training_date")
+  validationAuc   Float    @map("validation_auc")
+  deploymentStatus String  @default("training") @map("deployment_status") // training, canary, champion, retired
+  endpointArn     String?  @map("endpoint_arn")
+  trainingDataPath String? @map("training_data_path")
+  metadata        Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("model_versions")
+}
+
+// ---- Hospital Analytics (Aggregated) ----
+model HospitalAnalytics {
+  id              String   @id @default(uuid())
+  hospitalId      String   @map("hospital_id")
+  reportDate      DateTime @map("report_date")
+  activePatients  Int      @default(0) @map("active_patients")
+  readmissionRate Float    @default(0.0) @map("readmission_rate")
+  avgRiskScore    Float    @default(0.0) @map("avg_risk_score")
+  avgAdherenceRate Float   @default(0.0) @map("avg_adherence_rate")
+  escalationsGreen Int     @default(0) @map("escalations_green")
+  escalationsOrange Int    @default(0) @map("escalations_orange")
+  escalationsRed  Int      @default(0) @map("escalations_red")
+  teleconsultsBooked Int   @default(0) @map("teleconsults_booked")
+  teleconsultsAttended Int @default(0) @map("teleconsults_attended")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  hospital        Hospital @relation(fields: [hospitalId], references: [id])
+
+  @@unique([hospitalId, reportDate])
+  @@map("hospital_analytics")
+}
+
+// ---- User (Hospital Admin / Doctor) ----
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  passwordHash    String   @map("password_hash")
+  name            String
+  role            UserRole @default(COORDINATOR)
+  hospitalId      String   @map("hospital_id")
+  active          Boolean  @default(true)
+  lastLoginAt     DateTime? @map("last_login_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  hospital        Hospital @relation(fields: [hospitalId], references: [id])
+
+  @@map("users")
+}
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  COORDINATOR
+  NURSE
+}

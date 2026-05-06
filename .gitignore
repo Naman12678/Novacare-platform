@@ -1,0 +1,50 @@
+# Environment
+.env
+*.env.local
+.venv/
+venv/
+node_modules/
+
+# Build
+dist/
+build/
+cdk.out/
+.cdk.staging/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML
+ml_artifacts/
+*.joblib
+*.pkl
+
+# Logs & Testing
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# Docker
+localstack-data/
+
+# Secrets (never commit)
+**/access?tokens*
+**/*.pem
+**/*.key

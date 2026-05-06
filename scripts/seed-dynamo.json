@@ -1,0 +1,31 @@
+{
+  "pk": {"S": "PATIENT#demo-patient-001"},
+  "sk": {"S": "STATE#CURRENT"},
+  "patient_abha_id": {"S": "demo-patient-001"},
+  "episode_id": {"S": "demo-episode-001"},
+  "hospital_id": {"S": "demo-hospital-001"},
+  "discharge_date": {"S": "2026-05-06T00:00:00Z"},
+  "diagnosis_codes": {"L": [{"S": "I21.9"}]},
+  "medications": {"L": [
+    {"M": {"generic_name": {"S": "Aspirin"}, "dosage": {"S": "75mg"}, "time": {"S": "Morning"}, "rxnorm_code": {"S": "1191"}}},
+    {"M": {"generic_name": {"S": "Atorvastatin"}, "dosage": {"S": "40mg"}, "time": {"S": "Night"}, "rxnorm_code": {"S": "83367"}}},
+    {"M": {"generic_name": {"S": "Metoprolol"}, "dosage": {"S": "50mg"}, "time": {"S": "Morning"}, "rxnorm_code": {"S": "6918"}}}
+  ]},
+  "care_plan_id": {"S": "cp-demo-001"},
+  "language_pref": {"S": "en"},
+  "contact_channel": {"S": "WHATSAPP"},
+  "rural_flag": {"BOOL": false},
+  "comorbidity_count": {"N": "2"},
+  "current_day": {"N": "1"},
+  "symptom_history": {"L": []},
+  "med_adherence_streak": {"N": "0"},
+  "missed_contact_days": {"N": "0"},
+  "risk_score": {"N": "0.35"},
+  "risk_tier": {"S": "GREEN"},
+  "shap_explanation": {"M": {}},
+  "caregiver_ids": {"L": [{"S": "demo-caregiver-001"}]},
+  "last_agent": {"S": "discharge_architect"},
+  "next_scheduled_action": {"S": ""},
+  "errors": {"L": []},
+  "version": {"N": "0"}
+}
